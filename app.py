@@ -282,74 +282,104 @@ if len(especies_disponibles) < 2:
     st.warning("Se necesitan al menos 2 especies para comparar.")
     st.stop()
 
-if not ejecutar:
+# ----------------------------------------------------------------------------
+# EJECUCION DEL ANALISIS (entradas -> salidas -> metricas, en vivo)
+#
+# IMPORTANTE: Streamlit vuelve a correr TODO el script cada vez que se
+# interactua con cualquier control (el dropdown de alineamiento, el slider,
+# etc.). El boton "Ejecutar analisis" solo es True en el instante que se
+# presiona; en cualquier rerun posterior vuelve a ser False. Por eso los
+# resultados se guardan en st.session_state: asi sobreviven aunque cambies
+# de pestana o elijas otra pareja en el dropdown, y solo se recalculan
+# cuando el boton se presiona de nuevo.
+# ----------------------------------------------------------------------------
+if ejecutar:
+    secuencias = {
+        especie: leer_fasta_desde_texto(texto, limite)
+        for especie, texto in secuencias_crudas.items()
+    }
+
+    resultados = []
+    aristas = []
+    alineamientos = {}
+    figuras_matriz = {}
+
+    progreso = st.progress(0.0, text="Procesando comparaciones...")
+    pares = [
+        (especies_disponibles[i], especies_disponibles[j])
+        for i in range(len(especies_disponibles))
+        for j in range(i + 1, len(especies_disponibles))
+    ]
+
+    for indice, (especie1, especie2) in enumerate(pares):
+        inicio = time.time()
+        seq1 = secuencias[especie1]
+        seq2 = secuencias[especie2]
+
+        matriz, camino = needleman_wunsch(seq1, seq2)
+        puntaje = matriz[-1][-1]
+
+        alineada1, alineada2, ruta = reconstruir_alineamiento(seq1, seq2, camino)
+        coincidencias, diferencias, gaps, longitud, identidad, distancia = calcular_metricas(
+            alineada1, alineada2
+        )
+        segundos = time.time() - inicio
+
+        resultados.append(
+            {
+                "Especie 1": especie1,
+                "Especie 2": especie2,
+                "Puntaje NW": puntaje,
+                "Coincidencias": coincidencias,
+                "Diferencias": diferencias,
+                "Gaps": gaps,
+                "Longitud alineada": longitud,
+                "Identidad (%)": round(identidad * 100, 4),
+                "Distancia": round(distancia, 6),
+                "Tiempo (s)": round(segundos, 2),
+            }
+        )
+        aristas.append((distancia, especie1, especie2))
+        alineamientos[(especie1, especie2)] = (alineada1, alineada2, puntaje)
+
+        # La primera comparacion se guarda como figura (igual que main.py)
+        if indice == 0:
+            figuras_matriz[(especie1, especie2)] = figura_matriz(
+                matriz, ruta, especie1, especie2
+            )
+
+        progreso.progress((indice + 1) / len(pares), text=f"{especie1} vs {especie2} listo")
+
+    progreso.empty()
+
+    mst = kruskal(especies_disponibles, aristas)
+
+    # Guardar todo en la memoria de la sesion para que no se pierda
+    st.session_state["resultado_analisis"] = {
+        "secuencias": secuencias,
+        "resultados": resultados,
+        "alineamientos": alineamientos,
+        "figuras_matriz": figuras_matriz,
+        "mst": mst,
+        "especies_disponibles": especies_disponibles,
+    }
+
+if "resultado_analisis" not in st.session_state:
     st.info("Ajusta los parametros en la barra lateral y presiona **Ejecutar analisis**.")
     st.stop()
 
-# ----------------------------------------------------------------------------
-# EJECUCION DEL ANALISIS (entradas -> salidas -> metricas, en vivo)
-# ----------------------------------------------------------------------------
-secuencias = {
-    especie: leer_fasta_desde_texto(texto, limite)
-    for especie, texto in secuencias_crudas.items()
-}
+# Recuperar los resultados guardados (ya sea de esta corrida o de una anterior)
+datos = st.session_state["resultado_analisis"]
+secuencias = datos["secuencias"]
+resultados = datos["resultados"]
+alineamientos = datos["alineamientos"]
+figuras_matriz = datos["figuras_matriz"]
+mst = datos["mst"]
+especies_disponibles = datos["especies_disponibles"]
 
 with st.expander("Ver longitud de las secuencias leidas"):
     for especie, seq in secuencias.items():
         st.write(f"- **{especie}**: {len(seq)} nucleotidos")
-
-resultados = []
-aristas = []
-alineamientos = {}
-figuras_matriz = {}
-
-progreso = st.progress(0.0, text="Procesando comparaciones...")
-pares = [
-    (especies_disponibles[i], especies_disponibles[j])
-    for i in range(len(especies_disponibles))
-    for j in range(i + 1, len(especies_disponibles))
-]
-
-for indice, (especie1, especie2) in enumerate(pares):
-    inicio = time.time()
-    seq1 = secuencias[especie1]
-    seq2 = secuencias[especie2]
-
-    matriz, camino = needleman_wunsch(seq1, seq2)
-    puntaje = matriz[-1][-1]
-
-    alineada1, alineada2, ruta = reconstruir_alineamiento(seq1, seq2, camino)
-    coincidencias, diferencias, gaps, longitud, identidad, distancia = calcular_metricas(
-        alineada1, alineada2
-    )
-    segundos = time.time() - inicio
-
-    resultados.append(
-        {
-            "Especie 1": especie1,
-            "Especie 2": especie2,
-            "Puntaje NW": puntaje,
-            "Coincidencias": coincidencias,
-            "Diferencias": diferencias,
-            "Gaps": gaps,
-            "Longitud alineada": longitud,
-            "Identidad (%)": round(identidad * 100, 4),
-            "Distancia": round(distancia, 6),
-            "Tiempo (s)": round(segundos, 2),
-        }
-    )
-    aristas.append((distancia, especie1, especie2))
-    alineamientos[(especie1, especie2)] = (alineada1, alineada2, puntaje)
-
-    # La primera comparacion se guarda como figura (igual que main.py)
-    if indice == 0:
-        figuras_matriz[(especie1, especie2)] = figura_matriz(matriz, ruta, especie1, especie2)
-
-    progreso.progress((indice + 1) / len(pares), text=f"{especie1} vs {especie2} listo")
-
-progreso.empty()
-
-mst = kruskal(especies_disponibles, aristas)
 
 # ----------------------------------------------------------------------------
 # SALIDAS EN PANTALLA
@@ -418,3 +448,4 @@ with tab_mst:
     st.pyplot(figura_mst(mst, especies_disponibles))
 
 st.success("Proceso terminado ✅")
+
