@@ -275,12 +275,15 @@ with st.sidebar:
     limite = st.slider(
         "Nucleotidos a usar por secuencia",
         min_value=50,
-        max_value=2000,
+        max_value=1500,
         value=300,
         step=50,
         help=(
             "Needleman-Wunsch clasico es O(n*m) en tiempo y memoria. "
-            "Valores altos son mas precisos pero mas lentos en la demo en vivo."
+            "El maximo (1500) coincide con el LIMITE usado en el analisis "
+            "documentado en el paper, para que la demo sea consistente con "
+            "los resultados reportados. Valores mas bajos corren mas rapido "
+            "en vivo."
         ),
     )
 
