@@ -14,6 +14,7 @@ import os
 import time
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 import streamlit as st
 
 # ----------------------------------------------------------------------------
@@ -165,6 +166,31 @@ def kruskal(especies, aristas):
 # ----------------------------------------------------------------------------
 # GRAFICOS
 # ----------------------------------------------------------------------------
+def figura_diferencias(alineada1, alineada2, inicio, fin):
+    """Franja de colores: verde=match, rojo=mismatch, naranja=gap.
+    Mucho mas facil de leer que el heatmap completo para ubicar
+    diferencias puntuales, y permite hacer zoom a un tramo especifico.
+    """
+    categorias = []
+    for letra1, letra2 in zip(alineada1[inicio:fin], alineada2[inicio:fin]):
+        if letra1 == "-" or letra2 == "-":
+            categorias.append(2)  # gap
+        elif letra1 == letra2:
+            categorias.append(0)  # match
+        else:
+            categorias.append(1)  # mismatch
+
+    cmap = ListedColormap(["#2ecc71", "#e74c3c", "#f39c12"])  # verde, rojo, naranja
+
+    fig, ax = plt.subplots(figsize=(10, 1.3))
+    ax.imshow([categorias], aspect="auto", cmap=cmap, vmin=0, vmax=2)
+    ax.set_yticks([])
+    ax.set_xlabel(f"Posicion en el alineamiento ({inicio} - {fin})")
+    ax.set_title("🟩 Coincidencia   🟥 Diferencia   🟧 Gap", fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 def figura_matriz(matriz, ruta, especie1, especie2):
     x_ruta = [columna for _fila, columna in ruta]
     y_ruta = [fila for fila, _columna in ruta]
@@ -438,6 +464,31 @@ with tab_matriz:
             key="selector_matriz",
         )
         st.pyplot(figuras_matriz[opcion_matriz])
+
+        st.markdown("---")
+        st.subheader("Franja de diferencias (con zoom)")
+        st.caption(
+            "El heatmap completo es dificil de leer cuando las secuencias son muy "
+            "parecidas. Esta franja marca cada posicion del alineamiento y permite "
+            "acercarse (zoom) a un tramo especifico para ver mismatches y gaps."
+        )
+
+        alineada1_m, alineada2_m, _puntaje_m = alineamientos[opcion_matriz]
+        longitud_m = len(alineada1_m)
+
+        ancho_zoom = min(200, longitud_m)
+        rango = st.slider(
+            "Zoom: rango de posiciones a mostrar",
+            min_value=0,
+            max_value=longitud_m,
+            value=(0, ancho_zoom),
+            key="zoom_diferencias",
+        )
+
+        if rango[1] > rango[0]:
+            st.pyplot(figura_diferencias(alineada1_m, alineada2_m, rango[0], rango[1]))
+        else:
+            st.warning("Elige un rango valido (el final debe ser mayor que el inicio).")
     else:
         st.write("No hay figura disponible.")
 
