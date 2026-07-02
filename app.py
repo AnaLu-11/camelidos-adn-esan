@@ -342,11 +342,12 @@ if ejecutar:
         aristas.append((distancia, especie1, especie2))
         alineamientos[(especie1, especie2)] = (alineada1, alineada2, puntaje)
 
-        # La primera comparacion se guarda como figura (igual que main.py)
-        if indice == 0:
-            figuras_matriz[(especie1, especie2)] = figura_matriz(
-                matriz, ruta, especie1, especie2
-            )
+        # Se guarda la matriz de TODAS las parejas para poder elegir cual ver
+        # (el script original de consola solo guardaba la primera, por memoria;
+        # aqui se puede porque se libera cada figura de matplotlib al mostrarla)
+        figuras_matriz[(especie1, especie2)] = figura_matriz(
+            matriz, ruta, especie1, especie2
+        )
 
         progreso.progress((indice + 1) / len(pares), text=f"{especie1} vs {especie2} listo")
 
@@ -430,12 +431,13 @@ with tab_alineamiento:
 with tab_matriz:
     st.subheader("Matriz de puntajes y camino de traceback")
     if figuras_matriz:
-        par_guardado = next(iter(figuras_matriz))
-        st.pyplot(figuras_matriz[par_guardado])
-        st.caption(
-            f"Se muestra la primera comparacion procesada ({par_guardado[0]} vs "
-            f"{par_guardado[1]}), igual que en el script original."
+        opcion_matriz = st.selectbox(
+            "Selecciona la pareja de especies",
+            options=list(figuras_matriz.keys()),
+            format_func=lambda par: f"{par[0]} vs {par[1]}",
+            key="selector_matriz",
         )
+        st.pyplot(figuras_matriz[opcion_matriz])
     else:
         st.write("No hay figura disponible.")
 
@@ -448,4 +450,3 @@ with tab_mst:
     st.pyplot(figura_mst(mst, especies_disponibles))
 
 st.success("Proceso terminado ✅")
-
